@@ -32,12 +32,12 @@
 #include "tools.h"
 #include "wren.h"
 
-static WrenHandle* game_class;
-static WrenHandle* new_handle;
-static WrenHandle* update_handle;
-static WrenHandle* scanline_handle;
-static WrenHandle* border_handle;
-static WrenHandle* overline_handle;
+static WrenHandle* game_class       = NULL;
+static WrenHandle* new_handle       = NULL;
+static WrenHandle* update_handle    = NULL;
+static WrenHandle* scanline_handle  = NULL;
+static WrenHandle* border_handle    = NULL;
+static WrenHandle* overline_handle  = NULL;
 
 static bool loaded = false;
 
@@ -114,6 +114,8 @@ class TIC {\n\
     foreign static music(track, frame, loop, sustain)\n\
     foreign static time()\n\
     foreign static tstamp()\n\
+    foreign static vbank()\n\
+    foreign static vbank(bank)\n\
     foreign static sync()\n\
     foreign static sync(mask)\n\
     foreign static sync(mask, bank)\n\
@@ -1224,6 +1226,19 @@ static void wren_tstamp(WrenVM* vm)
     wrenSetSlotDouble(vm, 0, tic_api_tstamp(tic));
 }
 
+static void wren_vbank(WrenVM* vm)
+{
+    tic_core* core = getWrenCore(vm);
+    tic_mem* tic = (tic_mem*)core;
+
+    s32 prev = core->state.vbank.id;
+
+    if(wrenGetSlotCount(vm) == 2)
+        tic_api_vbank(tic, getWrenNumber(vm, 1));
+
+    wrenSetSlotDouble(vm, 0, prev);
+}
+
 static void wren_sync(WrenVM* vm)
 {
     tic_mem* tic = (tic_mem*)getWrenCore(vm);
@@ -1395,6 +1410,8 @@ static WrenForeignMethodFn foreignTicMethods(const char* signature)
 
     if (strcmp(signature, "static TIC.time()"                   ) == 0) return wren_time;
     if (strcmp(signature, "static TIC.tstamp()"                 ) == 0) return wren_tstamp;
+    if (strcmp(signature, "static TIC.vbank()"                  ) == 0) return wren_vbank;
+    if (strcmp(signature, "static TIC.vbank(_)"                 ) == 0) return wren_vbank;
     if (strcmp(signature, "static TIC.sync()"                   ) == 0) return wren_sync;
     if (strcmp(signature, "static TIC.sync(_)"                  ) == 0) return wren_sync;
     if (strcmp(signature, "static TIC.sync(_,_)"                ) == 0) return wren_sync;
@@ -1541,6 +1558,17 @@ static void callWrenTick(tic_mem* tic)
         wrenEnsureSlots(vm, 1);
         wrenSetSlotHandle(vm, 0, game_class);
         wrenCall(vm, update_handle);
+
+        // call OVR() callback for backward compatibility
+        if(overline_handle)
+        {
+            OVR(core)
+            {
+                wrenEnsureSlots(vm, 1);
+                wrenSetSlotHandle(vm, 0, game_class);
+                wrenCall(vm, overline_handle);                
+            }
+        }
     }
 }
 
@@ -1569,19 +1597,6 @@ static void callWrenBorder(tic_mem* tic, s32 row, void* data)
         wrenSetSlotHandle(vm, 0, game_class);
         wrenSetSlotDouble(vm, 1, row);
         wrenCall(vm, border_handle);
-    }
-}
-
-static void callWrenOverline(tic_mem* tic, void* data)
-{
-    tic_core* core = (tic_core*)tic;
-    WrenVM* vm = core->currentVM;
-
-    if (vm && game_class)
-    {
-        wrenEnsureSlots(vm, 1);
-        wrenSetSlotHandle(vm, 0, game_class);
-        wrenCall(vm, overline_handle);
     }
 }
 
@@ -1672,7 +1687,6 @@ tic_script_config WrenSyntaxConfig =
     {
         .scanline           = callWrenScanline,
         .border             = callWrenBorder,
-        .overline           = callWrenOverline,
     },
 
     .getOutline         = getWrenOutline,
@@ -1685,14 +1699,10 @@ tic_script_config WrenSyntaxConfig =
     .blockStringStart   = NULL,
     .blockStringEnd     = NULL,
     .singleComment      = "//",
+    .blockEnd           = "}",
 
     .keywords           = WrenKeywords,
     .keywordsCount      = COUNT_OF(WrenKeywords),
 };
-
-const tic_script_config* get_wren_script_config()
-{
-    return &WrenSyntaxConfig;
-}
 
 #endif /* defined(TIC_BUILD_WITH_WREN) */

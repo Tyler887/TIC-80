@@ -146,14 +146,18 @@ typedef struct
     tic_tick tick;
     tic_blit_callback callback;
     
-    struct
-    {
-        tic_palette palette;
-    } ovr;
-
     u32 synced;
 
-    u8 memmask[sizeof(tic_ram) << 1];
+    struct
+    {
+        s32 id;
+        tic_vram mem;
+    } vbank;
+
+    struct
+    {
+        u8 l, t, r, b;
+    } clip;
 
     bool initialized;
 } tic_core_state_data;
@@ -163,7 +167,7 @@ typedef struct
     tic_mem memory; // it should be first
 
     void* currentVM;
-    tic_script_config* currentScript;
+    const tic_script_config* currentScript;
 
     struct
     {
@@ -192,3 +196,15 @@ typedef struct
 void tic_core_tick_io(tic_mem* memory);
 void tic_core_sound_tick_start(tic_mem* memory);
 void tic_core_sound_tick_end(tic_mem* memory);
+
+// mouse cursor is the same in both modes
+// for backward compatibility
+#define OVR_COMPAT(CORE, BANK)                                              \
+    tic_api_vbank(&CORE->memory, BANK),                                     \
+    CORE->memory.ram.vram.vars.cursor = CORE->state.vbank.mem.vars.cursor
+
+#define OVR(CORE)                                   \
+    s32 MACROVAR(_bank_) = CORE->state.vbank.id;    \
+    OVR_COMPAT(CORE, 1);                            \
+    tic_api_cls(&CORE->memory, 0);                  \
+    SCOPE(OVR_COMPAT(CORE, MACROVAR(_bank_)))

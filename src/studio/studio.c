@@ -112,6 +112,7 @@ static struct
 
     EditorMode mode;
     EditorMode prevMode;
+    EditorMode toolbarMode;
 
     struct
     {
@@ -515,10 +516,10 @@ tic_map* getBankMap()
     return &impl.studio.tic->cart.banks[impl.bank.index.map].map;
 }
 
-tic_palette* getBankPalette(bool ovr)
+tic_palette* getBankPalette(bool vbank)
 {
     tic_bank* bank = &impl.studio.tic->cart.banks[impl.bank.index.sprites];
-    return ovr ? &bank->palette.ovr : &bank->palette.scn;
+    return vbank ? &bank->palette.vbank1 : &bank->palette.vbank0;
 }
 
 tic_flags* getBankFlags()
@@ -850,7 +851,7 @@ static void drawPopup()
 
             for(s32 i = 0, y = 0; y < (Height + anim); y++, dst += TIC80_MARGIN_RIGHT + TIC80_MARGIN_LEFT)
                 for(s32 x = 0; x < Width; x++)
-                *dst++ = tic_rgba(&bank->palette.scn.colors[tic_tool_peek4(tic->ram.vram.screen.data, i++)]);
+                *dst++ = tic_rgba(&bank->palette.vbank0.colors[tic_tool_peek4(tic->ram.vram.screen.data, i++)]);
         }
     }
 }
@@ -882,7 +883,7 @@ void drawToolbar(tic_mem* tic, bool bg)
             showTooltip(Tips[i]);
 
             if(checkMouseClick(&rect, tic_mouse_left))
-                setStudioMode(Modes[i]);
+                impl.toolbarMode = Modes[i];
         }
 
         if(getStudioMode() == Modes[i]) mode = i;
@@ -1237,7 +1238,10 @@ void setCursor(tic_cursor id)
 {
     tic_mem* tic = impl.studio.tic;
 
-    tic->ram.vram.vars.cursor.sprite = id;
+    VBANK(tic, 0)
+    {
+        tic->ram.vram.vars.cursor.sprite = id;
+    }
 }
 
 #if defined(BUILD_EDITORS)
@@ -1717,7 +1721,7 @@ static void drawBitIconRaw(u32* frame, s32 sx, s32 sy, s32 id, tic_color color)
     for(s32 src = 0; src != TIC_SPRITESIZE * TIC_SPRITESIZE; dst += TIC80_FULLWIDTH - TIC_SPRITESIZE)
         for(s32 i = 0; i != TIC_SPRITESIZE; ++i, ++dst)
             if(tic_tool_peek4(&bank->tiles.data[id].data, src++))
-                *dst = tic_rgba(&bank->palette.scn.colors[color]);
+                *dst = tic_rgba(&bank->palette.vbank0.colors[color]);
 }
 
 static void drawRecordLabel(u32* frame, s32 sx, s32 sy)
@@ -1742,7 +1746,6 @@ static void recordFrame(u32* pixels)
 
             if(impl.video.frame % TIC80_FRAMERATE < TIC80_FRAMERATE / 2)
             {
-                const u32* pal = tic_tool_palette_blit(&impl.config->cart->bank0.palette.scn, TIC80_PIXEL_COLOR_RGBA8888);
                 drawRecordLabel(pixels, TIC80_WIDTH-24, 8);
             }
 
@@ -1798,6 +1801,15 @@ static void renderStudio()
     }
 
     processShortcuts();
+
+    // clear screen for all the modes except the Run mode
+    if(impl.mode != TIC_RUN_MODE)
+    {
+        VBANK(tic, 1)
+        {
+            tic_api_cls(tic, 0);
+        }        
+    }
     
     switch(impl.mode)
     {
@@ -1971,7 +1983,7 @@ static void blitCursor()
             }[tic->ram.vram.vars.cursor.sprite];
         }
 
-        const tic_palette* pal = &bank->palette.scn;
+        const tic_palette* pal = &bank->palette.vbank0;
         const tic_tile* tile = &bank->sprites.data[tic->ram.vram.vars.cursor.sprite];
 
         tic_point s = {m->x - hot.x, m->y - hot.y};
@@ -1996,7 +2008,13 @@ static void studioTick()
     checkChanges();
     tic_net_start(impl.net);
 #endif
-    
+ 
+    if(impl.toolbarMode)
+    {
+        setStudioMode(impl.toolbarMode);
+        impl.toolbarMode = 0;
+    }
+
     processMouseStates();
     processGamepadMapping();
 
@@ -2010,20 +2028,20 @@ static void studioTick()
 
         tic_blit_callback callback[TIC_MODES_COUNT] = 
         {
-            [TIC_MENU_MODE]     = {impl.menu->scanline,     impl.menu->overline,    NULL,   impl.menu},
+            [TIC_MENU_MODE]     = {impl.menu->scanline,     NULL,   impl.menu},
 
 #if defined(BUILD_EDITORS)
-            [TIC_SPRITE_MODE]   = {sprite->scanline,        sprite->overline,       NULL,   sprite},
-            [TIC_MAP_MODE]      = {map->scanline,           map->overline,          NULL,   map},
-            [TIC_WORLD_MODE]    = {impl.world->scanline,    impl.world->overline,   NULL,   impl.world},
-            [TIC_DIALOG_MODE]   = {impl.dialog->scanline,   impl.dialog->overline,  NULL,   impl.dialog},
-            [TIC_SURF_MODE]     = {impl.surf->scanline,     impl.surf->overline,    NULL,   impl.surf},
+            [TIC_SPRITE_MODE]   = {sprite->scanline,        NULL,   sprite},
+            [TIC_MAP_MODE]      = {map->scanline,           NULL,   map},
+            [TIC_WORLD_MODE]    = {impl.world->scanline,    NULL,   impl.world},
+            [TIC_DIALOG_MODE]   = {impl.dialog->scanline,   NULL,   impl.dialog},
+            [TIC_SURF_MODE]     = {impl.surf->scanline,     NULL,   impl.surf},
 #endif
         };
 
         if(impl.mode != TIC_RUN_MODE)
         {
-            memcpy(tic->ram.vram.palette.data, getConfig()->cart->bank0.palette.scn.data, sizeof(tic_palette));
+            memcpy(tic->ram.vram.palette.data, getConfig()->cart->bank0.palette.vbank0.data, sizeof(tic_palette));
             tic->ram.font = impl.systemFont;
         }
 
@@ -2209,11 +2227,12 @@ Studio* studioInit(s32 argc, char **argv, s32 samplerate, const char* folder)
         impl.config->data.uiScale = args.scale;
 
 #if defined(CRT_SHADER_SUPPORT)
-    impl.config->data.soft  |= args.soft;
-    impl.config->data.crt   |= args.crt;
+    impl.config->data.crt           |= args.crt;
 #endif
 
     impl.config->data.goFullscreen  |= args.fullscreen;
+    impl.config->data.soft          |= args.soft;
+    impl.config->data.vsync         |= args.vsync;
     impl.config->data.noSound       |= args.nosound;
     impl.config->data.cli           |= args.cli;
 

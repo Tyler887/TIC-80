@@ -380,7 +380,7 @@ static void drawMapToolbar(Map* map, s32 x, s32 y)
     }
 }
 
-static void drawSheetOvr(Map* map, s32 x, s32 y)
+static void drawSheetVBank1(Map* map, s32 x, s32 y)
 {
     if(!sheetVisible(map))return;
 
@@ -420,12 +420,12 @@ static void initBlitMode(Map* map)
 {
     tic_mem* tic = map->tic;
     tiles2ram(&tic->ram, getBankTiles());
-    tic->ram.vram.vars.blit = tic_blit_calc_segment(&map->sheet.blit);
+    tic->ram.vram.blit.segment = tic_blit_calc_segment(&map->sheet.blit);
 }
 
 static void resetBlitMode(tic_mem* tic)
 {
-    tic->ram.vram.vars.blit = TIC_DEFAULT_BLIT_MODE;
+    tic->ram.vram.blit.segment = TIC_DEFAULT_BLIT_MODE;
 }
 
 static void drawSheetReg(Map* map, s32 x, s32 y)
@@ -562,7 +562,7 @@ static void drawTileCursor(Map* map)
     }
 }
 
-static void drawTileCursorOvr(Map* map)
+static void drawTileCursorVBank1(Map* map)
 {
     if(map->scroll.active)
         return;
@@ -734,7 +734,7 @@ static void drawPasteData(Map* map)
     }
 }
 
-static void drawPasteDataOvr(Map* map)
+static void drawPasteDataVBank1(Map* map)
 {
     tic_mem* tic = map->tic;
     s32 w = map->paste[0];
@@ -995,7 +995,7 @@ static void processMouseFillMode(Map* map)
     }
 }
 
-static void drawSelectionOvr(Map* map)
+static void drawSelectionVBank1(Map* map)
 {
     tic_rect* sel = &map->select.rect;
 
@@ -1246,6 +1246,51 @@ static void tick(Map* map)
 
     drawMapReg(map);
     drawSheetReg(map, TIC80_WIDTH - TIC_SPRITESHEET_SIZE - 1, TOOLBAR_SIZE);
+
+    VBANK(tic, 1)
+    {
+        tic_api_cls(tic, tic->ram.vram.vars.clear = tic_color_dark_blue);
+
+        memcpy(tic->ram.vram.palette.data, getConfig()->cart->bank0.palette.vbank0.data, sizeof(tic_palette));
+
+        tic_api_clip(tic, 0, TOOLBAR_SIZE, TIC80_WIDTH - (sheetVisible(map) ? TIC_SPRITESHEET_SIZE+2 : 0), TIC80_HEIGHT - TOOLBAR_SIZE);
+        {
+            s32 screenScrollX = map->scroll.x % TIC80_WIDTH;
+            s32 screenScrollY = map->scroll.y % TIC80_HEIGHT;
+
+            tic_api_line(tic, 0, TIC80_HEIGHT - screenScrollY, TIC80_WIDTH, TIC80_HEIGHT - screenScrollY, tic_color_grey);
+            tic_api_line(tic, TIC80_WIDTH - screenScrollX, 0, TIC80_WIDTH - screenScrollX, TIC80_HEIGHT, tic_color_grey);
+        }
+        tic_api_clip(tic, 0, 0, TIC80_WIDTH, TIC80_HEIGHT);
+
+        drawSheetVBank1(map, TIC80_WIDTH - TIC_SPRITESHEET_SIZE - 1, TOOLBAR_SIZE);
+
+        {
+            tic_rect rect = {MAP_X, MAP_Y, MAP_WIDTH, MAP_HEIGHT};
+            if(!sheetVisible(map) && checkMousePos(&rect) && !tic_api_key(tic, tic_key_space))
+            {            
+                switch(map->mode)
+                {
+                case MAP_DRAW_MODE:
+                case MAP_FILL_MODE:
+                    drawTileCursorVBank1(map);
+                    break;
+                case MAP_SELECT_MODE:
+                    if(map->paste)
+                        drawPasteDataVBank1(map);
+                    break;
+                default:
+                    break;
+                }
+            }
+        }
+
+        if(!sheetVisible(map))
+            drawSelectionVBank1(map);
+
+        drawMapToolbar(map, TIC80_WIDTH, 1);
+        drawToolbar(map->tic, false);
+    }
 }
 
 static void onStudioEvent(Map* map, StudioEvent event)
@@ -1265,50 +1310,6 @@ static void scanline(tic_mem* tic, s32 row, void* data)
 {
     if(row == 0)
         memcpy(&tic->ram.vram.palette, getBankPalette(false), sizeof(tic_palette));
-}
-
-static void overline(tic_mem* tic, void* data)
-{
-    Map* map = (Map*)data;
-    memcpy(tic->ram.vram.palette.data, getConfig()->cart->bank0.palette.scn.data, sizeof(tic_palette));
-
-    tic_api_clip(tic, 0, TOOLBAR_SIZE, TIC80_WIDTH - (sheetVisible(map) ? TIC_SPRITESHEET_SIZE+2 : 0), TIC80_HEIGHT - TOOLBAR_SIZE);
-    {
-        s32 screenScrollX = map->scroll.x % TIC80_WIDTH;
-        s32 screenScrollY = map->scroll.y % TIC80_HEIGHT;
-
-        tic_api_line(tic, 0, TIC80_HEIGHT - screenScrollY, TIC80_WIDTH, TIC80_HEIGHT - screenScrollY, tic_color_grey);
-        tic_api_line(tic, TIC80_WIDTH - screenScrollX, 0, TIC80_WIDTH - screenScrollX, TIC80_HEIGHT, tic_color_grey);
-    }
-    tic_api_clip(tic, 0, 0, TIC80_WIDTH, TIC80_HEIGHT);
-
-    drawSheetOvr(map, TIC80_WIDTH - TIC_SPRITESHEET_SIZE - 1, TOOLBAR_SIZE);
-
-    {
-        tic_rect rect = {MAP_X, MAP_Y, MAP_WIDTH, MAP_HEIGHT};
-        if(!sheetVisible(map) && checkMousePos(&rect) && !tic_api_key(tic, tic_key_space))
-        {            
-            switch(map->mode)
-            {
-            case MAP_DRAW_MODE:
-            case MAP_FILL_MODE:
-                drawTileCursorOvr(map);
-                break;
-            case MAP_SELECT_MODE:
-                if(map->paste)
-                    drawPasteDataOvr(map);
-                break;
-            default:
-                break;
-            }
-        }
-    }
-
-    if(!sheetVisible(map))
-        drawSelectionOvr(map);
-
-    drawMapToolbar(map, TIC80_WIDTH, 1);
-    drawToolbar(map->tic, false);
 }
 
 void initMap(Map* map, tic_mem* tic, tic_map* src)
@@ -1353,7 +1354,6 @@ void initMap(Map* map, tic_mem* tic, tic_map* src)
         },
         .history = history_create(src, sizeof(tic_map)),
         .event = onStudioEvent,
-        .overline = overline,
         .scanline = scanline,
     };
 

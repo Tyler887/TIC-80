@@ -414,7 +414,7 @@ static void drawBrushSlider(Sprite* sprite, s32 x, s32 y)
     tic_api_rect(tic, x+1, offset+1, Size-2, Size-2, (over ? tic_color_white : tic_color_grey));
 }
 
-static void drawCanvasOvr(Sprite* sprite, s32 x, s32 y)
+static void drawCanvasVBank1(Sprite* sprite, s32 x, s32 y)
 {
     tic_mem* tic = sprite->tic;
 
@@ -900,7 +900,7 @@ static void drawRGBSlider(Sprite* sprite, s32 x, s32 y, u8* value)
 
 static void pasteColor(Sprite* sprite)
 {
-    bool ovr = sprite->palette.ovr;
+    bool ovr = sprite->palette.vbank1;
     if(!fromClipboard(&getBankPalette(ovr)->colors[sprite->color], sizeof(tic_rgb), false, true))
         fromClipboard(getBankPalette(ovr)->data, sizeof(tic_palette), false, true);
 }
@@ -926,7 +926,7 @@ static void drawRGBTools(Sprite* sprite, s32 x, s32 y)
                 down = true;
 
             if(checkMouseClick(&rect, tic_mouse_left))
-                toClipboard(getBankPalette(sprite->palette.ovr)->data, sizeof(tic_palette), false);
+                toClipboard(getBankPalette(sprite->palette.vbank1)->data, sizeof(tic_palette), false);
         }
 
         if(down)
@@ -987,7 +987,7 @@ static void drawRGBSliders(Sprite* sprite, s32 x, s32 y)
         Height = TIC_FONT_HEIGHT + 1
     };
 
-    u8* data = &getBankPalette(sprite->palette.ovr)->data[sprite->color * Rows];
+    u8* data = &getBankPalette(sprite->palette.vbank1)->data[sprite->color * Rows];
 
     {
         tic_rect rect = {x - 20, y - 3, TIC_FONT_WIDTH * Cols + 1, TIC_FONT_HEIGHT * Rows + 1};
@@ -1056,7 +1056,7 @@ static tic_palette_dimensions getPaletteDimensions(Sprite* sprite)
     return (tic_palette_dimensions){cell_w, cell_h, cols, rows, cols*rows};
 }
 
-static void drawPaletteOvr(Sprite* sprite, s32 x, s32 y)
+static void drawPaletteVBank1(Sprite* sprite, s32 x, s32 y)
 {
     tic_mem* tic = sprite->tic;
     tic_rect rect = {x, y, PALETTE_WIDTH-1, PALETTE_HEIGHT-1};
@@ -1120,7 +1120,7 @@ static void drawPaletteOvr(Sprite* sprite, s32 x, s32 y)
 
     if(sprite->advanced)
     {
-        tic_rect rect = {x - 15, y + 1, 11, 5};
+        tic_rect rect = {x - 22, y + 1, 19, 5};
 
         bool down = false;
         bool over = false;
@@ -1129,27 +1129,27 @@ static void drawPaletteOvr(Sprite* sprite, s32 x, s32 y)
             setCursor(tic_cursor_hand);
             over = true;
 
-            showTooltip("SCANLINE PALETTE");
+            showTooltip("VBANK0 PALETTE");
 
             if(checkMouseDown(&rect, tic_mouse_left))
                 down = true;
 
             if(checkMouseClick(&rect, tic_mouse_left))
-                sprite->palette.ovr = false;
+                sprite->palette.vbank1 = false;
         }
 
         {
-            static const char* Label = "SCN";
-            if(!sprite->palette.ovr)
+            static const char* Label = "bank0";
+            if(!sprite->palette.vbank1)
                 tic_api_print(tic, Label, rect.x, rect.y + 1, tic_color_black, false, 1, true);
 
-            tic_api_print(tic, Label, rect.x, rect.y, sprite->palette.ovr ? tic_color_dark_grey : tic_color_white, false, 1, true);
+            tic_api_print(tic, Label, rect.x, rect.y, sprite->palette.vbank1 ? tic_color_dark_grey : tic_color_white, false, 1, true);
         }
     }
 
     if(sprite->advanced)
     {
-        tic_rect rect = {x - 15, y + 9, 11, 5};
+        tic_rect rect = {x - 22, y + 9, 19, 5};
 
         bool down = false;
         bool over = false;
@@ -1158,21 +1158,21 @@ static void drawPaletteOvr(Sprite* sprite, s32 x, s32 y)
             setCursor(tic_cursor_hand);
             over = true;
 
-            showTooltip("OVERLINE PALETTE");
+            showTooltip("VBANK1 PALETTE");
 
             if(checkMouseDown(&rect, tic_mouse_left))
                 down = true;
 
             if(checkMouseClick(&rect, tic_mouse_left))
-                sprite->palette.ovr = true;
+                sprite->palette.vbank1 = true;
         }
 
         {
-            static const char* Label = "OVR";
-            if(sprite->palette.ovr)
+            static const char* Label = "bank1";
+            if(sprite->palette.vbank1)
                 tic_api_print(tic, Label, rect.x, rect.y + 1, tic_color_black, false, 1, true);
 
-            tic_api_print(tic, Label, rect.x, rect.y, sprite->palette.ovr ? tic_color_white : tic_color_dark_grey, false, 1, true);
+            tic_api_print(tic, Label, rect.x, rect.y, sprite->palette.vbank1 ? tic_color_white : tic_color_dark_grey, false, 1, true);
         }
     }
 
@@ -1246,7 +1246,7 @@ static void updateSpriteSize(Sprite* sprite, s32 size)
     }
 }
 
-static void drawSheetOvr(Sprite* sprite, s32 x, s32 y)
+static void drawSheetVBank1(Sprite* sprite, s32 x, s32 y)
 {
     tic_mem* tic = sprite->tic;
 
@@ -1290,9 +1290,9 @@ static void drawSheet(Sprite* sprite, s32 x, s32 y)
 {
     tic_mem* tic = sprite->tic;
     tiles2ram(&tic->ram, sprite->src);
-    tic->ram.vram.vars.blit = tic_blit_calc_segment(&sprite->blit);
+    tic->ram.vram.blit.segment = tic_blit_calc_segment(&sprite->blit);
     tic_api_spr(tic, 0, x, y, TIC_SPRITESHEET_COLS, TIC_SPRITESHEET_COLS, NULL, 0, 1, tic_no_flip, tic_no_rotate);
-    tic->ram.vram.vars.blit = TIC_DEFAULT_BLIT_MODE;
+    tic->ram.vram.blit.segment = TIC_DEFAULT_BLIT_MODE;
 }
 
 static void flipSpriteHorz(Sprite* sprite)
@@ -1475,7 +1475,8 @@ static void copyToClipboard(Sprite* sprite)
 {
     s32 size = sprite->size * sprite->size * TIC_PALETTE_BPP / BITS_IN_BYTE;
 
-    DEFER(u8* buffer = malloc(size), free(buffer))
+    u8* buffer = malloc(size);
+    SCOPE(free(buffer))
     {
         tic_rect rect = getSpriteRect(sprite);
         s32 r = rect.x + rect.w;
@@ -1499,7 +1500,8 @@ static void copyFromClipboard(Sprite* sprite)
 {
     s32 size = sprite->size * sprite->size * TIC_PALETTE_BPP / BITS_IN_BYTE;
 
-    DEFER(u8* buffer = malloc(size), free(buffer))
+    u8* buffer = malloc(size);
+    SCOPE(free(buffer))
     {
         if(fromClipboard(buffer, size, true, false))
         {
@@ -1659,7 +1661,7 @@ static void processKeyboard(Sprite* sprite)
 
                 if(isxdigit(sym))
                 {
-                    u8* data = &getBankPalette(sprite->palette.ovr)->data[sprite->color * Rows + row];
+                    u8* data = &getBankPalette(sprite->palette.vbank1)->data[sprite->color * Rows + row];
                     char buf[sizeof "FF"];
                     sprintf(buf, "%02X", *data);
                     buf[col] = toupper(sym);
@@ -1813,56 +1815,12 @@ static void drawSpriteToolbar(Sprite* sprite)
     }
 }
 
-static void tick(Sprite* sprite)
-{
-    tic_mem* tic = sprite->tic;
-
-    // process scroll
-    {
-        tic80_input* input = &tic->ram.input;
-
-        if(input->mouse.scrolly)
-        {
-            s32 size = sprite->size;
-            s32 delta = input->mouse.scrolly;
-
-            if(delta > 0) 
-            {
-                if(size < (TIC_SPRITESIZE * TIC_SPRITESIZE)) size <<= 1;                    
-            }
-            else if(size > TIC_SPRITESIZE) size >>= 1;
-
-            updateSpriteSize(sprite, size); 
-        }
-    }
-
-    processKeyboard(sprite);
-
-    drawCanvas(sprite, CanvasX, CanvasY);
-    drawPalette(sprite, PaletteX, PaletteY);
-    drawSheet(sprite, SheetX, SheetY);
-
-    sprite->tickCounter++;
-}
-
-static void onStudioEvent(Sprite* sprite, StudioEvent event)
-{
-    switch(event)
-    {
-    case TIC_TOOLBAR_CUT: cutToClipboard(sprite); break;
-    case TIC_TOOLBAR_COPY: copyToClipboard(sprite); break;
-    case TIC_TOOLBAR_PASTE: copyFromClipboard(sprite); break;
-    case TIC_TOOLBAR_UNDO: undo(sprite); break;
-    case TIC_TOOLBAR_REDO: redo(sprite); break;
-    }
-}
-
 static void scanline(tic_mem* tic, s32 row, void* data)
 {
     Sprite* sprite = (Sprite*)data;
     
     if(row == 0)
-        memcpy(&tic->ram.vram.palette, getBankPalette(sprite->palette.ovr), sizeof(tic_palette));
+        memcpy(&tic->ram.vram.palette, getBankPalette(sprite->palette.vbank1), sizeof(tic_palette));
 }
 
 static void drawAdvancedButton(Sprite* sprite, s32 x, s32 y)
@@ -1894,52 +1852,96 @@ static void drawAdvancedButton(Sprite* sprite, s32 x, s32 y)
     tic_api_rect(tic, rect.x + Gap + (sprite->advanced ? Size : 0), rect.y + Gap, Size, Size, over ? tic_color_light_grey : tic_color_grey);
 }
 
-static void overline(tic_mem* tic, void* data)
+static void tick(Sprite* sprite)
 {
-    static const tic_rect bg[] = 
+    tic_mem* tic = sprite->tic;
+
+    // process scroll
     {
-        {0, ToolbarH, SheetX, CanvasY-ToolbarH},
-        {0, CanvasY, CanvasX, CanvasH},
-        {CanvasX + CanvasW, CanvasY, SheetX - (CanvasX + CanvasW), CanvasH},
+        tic80_input* input = &tic->ram.input;
 
-        {0, CanvasY + CanvasH, SheetX, PaletteY - CanvasY - CanvasH},
+        if(input->mouse.scrolly)
+        {
+            s32 size = sprite->size;
+            s32 delta = input->mouse.scrolly;
 
-        {0, PaletteY, PaletteX, PaletteH},
-        {PaletteX + PaletteW, PaletteY, SheetX - PaletteX - PaletteW, PaletteH},
+            if(delta > 0) 
+            {
+                if(size < (TIC_SPRITESIZE * TIC_SPRITESIZE)) size <<= 1;
+            }
+            else if(size > TIC_SPRITESIZE) size >>= 1;
 
-        {0, PaletteY + PaletteH, SheetX, TIC80_HEIGHT - PaletteY - PaletteH},
-    };
-
-    Sprite* sprite = (Sprite*)data;
-
-    memcpy(tic->ram.vram.palette.data, getConfig()->cart->bank0.palette.scn.data, sizeof(tic_palette));
-
-    for(const tic_rect* r = bg; r < bg + COUNT_OF(bg); r++)
-        tic_api_rect(tic, r->x, r->y, r->w, r->h, tic_color_grey);
-
-    drawCanvasOvr(sprite, 24, 20);
-    drawMoveButtons(sprite);
-
-    if(sprite->advanced)
-    {
-        if(sprite->blit.mode == 4)
-            drawFlags(sprite, 24+64+7, 20+8);
-
-        drawBitMode(sprite, PaletteX, PaletteY + PaletteH + 2, PaletteW, 8);        
+            updateSpriteSize(sprite, size); 
+        }
     }
 
-    drawBankTabs(sprite, SheetX, 8);
+    processKeyboard(sprite);
 
-    sprite->palette.edit 
-        ? drawRGBSliders(sprite, 24, 91) 
-        : drawTools(sprite, 12, 96);
+    drawCanvas(sprite, CanvasX, CanvasY);
+    drawPalette(sprite, PaletteX, PaletteY);
+    drawSheet(sprite, SheetX, SheetY);
 
-    drawPaletteOvr(sprite, 24, 112);
-    drawSheetOvr(sprite, TIC80_WIDTH - TIC_SPRITESHEET_SIZE - 1, 7);
-    drawAdvancedButton(sprite, 4, 11);
-    
-    drawSpriteToolbar(sprite);
-    drawToolbar(tic, false);
+    VBANK(tic, 1)
+    {
+        tic_api_cls(tic, tic->ram.vram.vars.clear = tic_color_dark_blue);
+
+        static const tic_rect bg[] = 
+        {
+            {0, ToolbarH, SheetX, CanvasY-ToolbarH},
+            {0, CanvasY, CanvasX, CanvasH},
+            {CanvasX + CanvasW, CanvasY, SheetX - (CanvasX + CanvasW), CanvasH},
+
+            {0, CanvasY + CanvasH, SheetX, PaletteY - CanvasY - CanvasH},
+
+            {0, PaletteY, PaletteX, PaletteH},
+            {PaletteX + PaletteW, PaletteY, SheetX - PaletteX - PaletteW, PaletteH},
+
+            {0, PaletteY + PaletteH, SheetX, TIC80_HEIGHT - PaletteY - PaletteH},
+        };
+
+        memcpy(tic->ram.vram.palette.data, getConfig()->cart->bank0.palette.vbank0.data, sizeof(tic_palette));
+
+        for(const tic_rect* r = bg; r < bg + COUNT_OF(bg); r++)
+            tic_api_rect(tic, r->x, r->y, r->w, r->h, tic_color_grey);
+
+        drawCanvasVBank1(sprite, 24, 20);
+        drawMoveButtons(sprite);
+
+        if(sprite->advanced)
+        {
+            if(sprite->blit.mode == 4)
+                drawFlags(sprite, 24+64+7, 20+8);
+
+            drawBitMode(sprite, PaletteX, PaletteY + PaletteH + 2, PaletteW, 8);        
+        }
+
+        drawBankTabs(sprite, SheetX, 8);
+
+        sprite->palette.edit 
+            ? drawRGBSliders(sprite, 24, 91) 
+            : drawTools(sprite, 12, 96);
+
+        drawPaletteVBank1(sprite, 24, 112);
+        drawSheetVBank1(sprite, TIC80_WIDTH - TIC_SPRITESHEET_SIZE - 1, 7);
+        drawAdvancedButton(sprite, 4, 11);
+        
+        drawSpriteToolbar(sprite);
+        drawToolbar(tic, false);
+    }
+
+    sprite->tickCounter++;
+}
+
+static void onStudioEvent(Sprite* sprite, StudioEvent event)
+{
+    switch(event)
+    {
+    case TIC_TOOLBAR_CUT: cutToClipboard(sprite); break;
+    case TIC_TOOLBAR_COPY: copyToClipboard(sprite); break;
+    case TIC_TOOLBAR_PASTE: copyFromClipboard(sprite); break;
+    case TIC_TOOLBAR_UNDO: undo(sprite); break;
+    case TIC_TOOLBAR_REDO: redo(sprite); break;
+    }
 }
 
 void initSprite(Sprite* sprite, tic_mem* tic, tic_tiles* src)
@@ -1978,7 +1980,6 @@ void initSprite(Sprite* sprite, tic_mem* tic, tic_tiles* src)
         .mode = SPRITE_DRAW_MODE,
         .history = history_create(src, TIC_SPRITES * sizeof(tic_tile)),
         .event = onStudioEvent,
-        .overline = overline,
         .scanline = scanline,
     };
     switchBitMode(sprite, TIC_DEFAULT_BIT_DEPTH);

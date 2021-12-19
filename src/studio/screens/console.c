@@ -96,7 +96,7 @@
     macro(y)                    \
     macro(w)                    \
     macro(h)                    \
-    macro(ovr)
+    macro(vbank)
 
 #define EXPORT_CMD_LIST(macro)  \
     macro(win)                  \
@@ -122,18 +122,18 @@
 
 #define EXPORT_KEYS_LIST(macro) \
     macro(bank)                 \
-    macro(ovr)                  \
+    macro(vbank)                \
     macro(id)                   \
     ALONE_KEY(macro)
 
 static const char* WelcomeText = 
     "TIC-80 is a fantasy computer for making, playing and sharing tiny games.\n\n"
-    "There are built-in tools for development: code, sprites, maps, sound editors and the command line, "
+    "It has built-in tools for development: code, sprites, maps, sound editors and the command line, "
     "which is enough to create a mini retro game.\n"
-    "At the exit you will get a cartridge file, which can be stored and played on the website.\n\n"
-    "Also, the game can be packed into a player that works on all popular platforms and distribute as you wish.\n"
-    "To make a retro styled game the whole process of creation takes place under some technical limitations: "
-    "240x136 pixels display, 16 color palette, 256 8x8 color sprites, 4 channel sound and etc.";
+    "In the end, you will get a cartridge file, which can be stored and played on the website.\n\n"
+    "Also, the game can be packed into a player that works on all popular platforms and distributed as you wish.\n"
+    "To make a retro-style game, the whole creation process takes place under some technical limitations: "
+    "240x136 pixels display, 16 color palette, 256 8x8 color sprites, 4 channel sound, etc.";
 
 static const struct SpecRow {const char* section; const char* info;} SpecText1[] = 
 {
@@ -150,12 +150,12 @@ static const char* TermsText =
     "## Terms of Use\n"
     "- All cartridges posted on the " TIC_WEBSITE " website are the property of their authors.\n"
     "- Do not redistribute the cartridge without permission, directly from the author.\n"
-    "- By uploading cartridges to the site, you grant Nesbox the right to freely use and distribute them."
+    "- By uploading cartridges to the site, you grant Nesbox the right to freely use and distribute them. "
     "All other rights by default remain with the author.\n"
     "- Do not post material that violates copyright, obscenity or any other laws.\n"
     "- Nesbox reserves the right to remove or filter any material without prior notice.\n\n"
     "## Privacy Policy\n"
-    "We store only the user's email and password in encrypted form and will not transfer any personal"
+    "We store only the user's email and password in encrypted form and will not transfer any personal "
     "information to third parties without explicit permission.";
 
 static const char* LicenseText = 
@@ -210,14 +210,14 @@ static const char* PngExt = PNG_EXT;
 
 
 // You must free the result if result is non-NULL. TODO: find a better place for this function?
-char *str_replace(char *orig, char *rep, char *with) {
+char *str_replace(const char *orig, char *rep, char *with) {
     char *result; // the return string
-    char *ins;    // the next insert point
+    const char *ins;    // the next insert point
     char *tmp;    // varies
-    int len_rep;  // length of rep (the string to remove)
-    int len_with; // length of with (the string to replace rep with)
-    int len_front; // distance between rep and end of last rep
-    int count;    // number of replacements
+    s32 len_rep;  // length of rep (the string to remove)
+    s32 len_with; // length of with (the string to replace rep with)
+    s32 len_front; // distance between rep and end of last rep
+    s32 count;    // number of replacements
 
     // sanity checks and initialization
     if (!orig || !rep)
@@ -261,15 +261,23 @@ static char* replaceHelpTokens(const char* text)
     char langnames[10240] = {0};
     char langextensions[10240] = {0};
     char langnamespipe[10240] = {0};
+
     FOR_EACH_LANG(ln)
+        bool isLast = *(conf+1) == NULL;
+        bool isSecondToLast = *(conf+2) == NULL;
+
         strcat(langnames, ln->name);
-        strcat(langnames, " ");
+        if (!isLast)
+            strcat(langnames, ", ");
+        if (isSecondToLast)
+            strcat(langnames, "or ");
 
         strcat(langextensions, ln->fileExtension);
         strcat(langextensions, " ");
 
         strcat(langnamespipe, ln->name);
-        strcat(langnamespipe, "|");
+        if (!isLast)
+            strcat(langnamespipe, "|");
     FOR_EACH_LANG_END
 
 
@@ -1111,7 +1119,7 @@ static void onNewCommandConfirmed(Console* console)
         done = true;
     }
 
-    if(done) printBack(console, "\nnew cart is created");
+    if(done) printBack(console, "\nnew cart has been created");
     else printError(console, "\ncart not created");
 
     commandDone(console);
@@ -1539,11 +1547,11 @@ static inline tic_bank* getBank(Console* console, s32 bank)
     return &console->tic->cart.banks[bank];
 }
 
-static inline const tic_palette* getPalette(Console* console, s32 bank, s32 ovr)
+static inline const tic_palette* getPalette(Console* console, s32 bank, s32 vbank)
 {
-    return ovr 
-        ? &getBank(console, bank)->palette.ovr
-        : &getBank(console, bank)->palette.scn;
+    return vbank 
+        ? &getBank(console, bank)->palette.vbank1
+        : &getBank(console, bank)->palette.vbank0;
 }
 
 static void onImportTilesBase(Console* console, const char* name, const void* buffer, s32 size, tic_tile* base, ImportParams params)
@@ -1555,7 +1563,7 @@ static void onImportTilesBase(Console* console, const char* name, const void* bu
 
     if(img.data) SCOPE(free(img.data))
     {
-        const tic_palette* pal = getPalette(console, params.bank, params.ovr);
+        const tic_palette* pal = getPalette(console, params.bank, params.vbank);
         
         for(s32 j = 0, y = params.y, h = y + (params.h ? params.h : img.height); y < h; ++y, ++j)
             for(s32 i = 0, x = params.x, w = x + (params.w ? params.w : img.width); x < w; ++x, ++i)
@@ -1626,7 +1634,7 @@ static void onImport_screen(Console* console, const char* name, const void* buff
         if(img.width == TIC80_WIDTH && img.height == TIC80_HEIGHT)
         {
             tic_bank* bank = getBank(console, params.bank);
-            const tic_palette* pal = getPalette(console, params.bank, params.ovr);
+            const tic_palette* pal = getPalette(console, params.bank, params.vbank);
 
             s32 i = 0;
             for(const png_rgba *pix = img.pixels, *end = pix + (TIC80_WIDTH * TIC80_HEIGHT); pix < end; pix++)
@@ -1733,7 +1741,7 @@ static void exportSprites(Console* console, const char* filename, tic_tile* base
 
     SCOPE(free(img.data))
     {
-        const tic_palette* pal = getPalette(console, params.bank, params.ovr);
+        const tic_palette* pal = getPalette(console, params.bank, params.vbank);
 
         for(s32 i = 0; i < TIC_SPRITESHEET_SIZE * TIC_SPRITESHEET_SIZE; i++)
             img.values[i] = tic_rgba(&pal->colors[getSpritePixel(base, i % TIC_SPRITESHEET_SIZE, i / TIC_SPRITESHEET_SIZE)]);
@@ -2074,7 +2082,7 @@ static void onExport_screen(Console* console, const char* param, const char* nam
 
     SCOPE(free(img.data))
     {
-        const tic_palette* pal = getPalette(console, params.bank, params.ovr);
+        const tic_palette* pal = getPalette(console, params.bank, params.vbank);
 
         tic_bank* bank = getBank(console, params.bank);
         for(s32 i = 0; i < TIC80_WIDTH * TIC80_HEIGHT; i++)
@@ -2185,7 +2193,7 @@ static CartSaveResult saveCartName(Console* console, const char* name)
                             enum{PaddingLeft = 8, PaddingTop = 8};
 
                             const tic_bank* bank = &tic->cart.bank0;
-                            const tic_rgb* pal = bank->palette.scn.colors;
+                            const tic_rgb* pal = bank->palette.vbank0.colors;
                             const u8* screen = bank->screen.data;
                             u32* ptr = img.values + PaddingTop * CoverWidth + PaddingLeft;
 
@@ -2215,7 +2223,7 @@ static CartSaveResult saveCartName(Console* console, const char* name)
 
                             u32* ptr = img.values + PaddingTop * CoverWidth + PaddingLeft;
                             const u8* screen = tic->ram.vram.screen.data;
-                            const tic_rgb* pal = getConfig()->cart->bank0.palette.scn.colors;
+                            const tic_rgb* pal = getConfig()->cart->bank0.palette.vbank0.colors;
 
                             for(s32 y = 0; y < Height; y++)
                                 for(s32 x = 0; x < Width; x++)
@@ -2499,6 +2507,164 @@ static const char HelpUsage[] = "help [<text>"
 #undef  HELP_CMD_DEF
     "]";
 
+#define SECTION_DEF(NAME, ...)  "|" #NAME
+#define EXPORT_CMD_DEF(name)    #name "|"
+#define EXPORT_KEYS_DEF(name)   #name "=0 "
+#define IMPORT_CMD_DEF(name)    #name "|"
+#define IMPORT_KEYS_DEF(key)    #key"=0 "
+
+#if defined(CAN_ADDGET_FILE)
+#define ADDGET_FILE(macro)                                                              \
+    macro("add",                                                                        \
+        NULL,                                                                           \
+        "upload file to the browser local storage.",                                    \
+        NULL,                                                                           \
+        onAddCommand)                                                                   \
+                                                                                        \
+    macro("get",                                                                        \
+        NULL,                                                                           \
+        "download file from the browser local storage.",                                \
+        "get <file>",                                                                   \
+        onGetCommand)                                                                   \
+
+#else
+#define ADDGET_FILE(macro)
+#endif
+
+// macro(name, alt, help, usage, handler)
+#define COMMANDS_LIST(macro)                                                            \
+    macro("help",                                                                       \
+        NULL,                                                                           \
+        "show help info about commands/api/...",                                        \
+        HelpUsage,                                                                      \
+        onHelpCommand)                                                                  \
+                                                                                        \
+    macro("exit",                                                                       \
+        "quit",                                                                         \
+        "exit the application.",                                                        \
+        NULL,                                                                           \
+        onExitCommand)                                                                  \
+                                                                                        \
+    macro("new",                                                                        \
+        NULL,                                                                           \
+        "creates a new `Hello World` cartridge.",                                       \
+        "new [$LANG_NAMES_PIPE$]",                                                      \
+        onNewCommand)                                                                   \
+                                                                                        \
+    macro("load",                                                                       \
+        NULL,                                                                           \
+        "load cartridge from the local filesystem"                                      \
+        "(there's no need to type the .tic extension).\n"                               \
+        "you can also load just the section (sprites, map etc) from another cart.",     \
+        "load <cart> [code" TIC_SYNC_LIST(SECTION_DEF) "]",                             \
+        onLoadCommand)                                                                  \
+                                                                                        \
+    macro("save",                                                                       \
+        NULL,                                                                           \
+        "save cartridge to the local filesystem, use $LANG_EXTENSIONS$"                 \
+        "cart extension to save it in text format (PRO feature).",                      \
+        "save <cart>",                                                                  \
+        onSaveCommand)                                                                  \
+                                                                                        \
+    macro("run",                                                                        \
+        NULL,                                                                           \
+        "run current cart / project.",                                                  \
+        NULL,                                                                           \
+        onRunCommand)                                                                   \
+                                                                                        \
+    macro("resume",                                                                     \
+        NULL,                                                                           \
+        "resume last run cart / project.",                                              \
+        NULL,                                                                           \
+        onResumeCommand)                                                                \
+                                                                                        \
+    macro("eval",                                                                       \
+        "=",                                                                            \
+        "run code provided code.",                                                      \
+        NULL,                                                                           \
+        onEvalCommand)                                                                  \
+                                                                                        \
+    macro("dir",                                                                        \
+        "ls",                                                                           \
+        "show list of local files.",                                                    \
+        NULL,                                                                           \
+        onDirCommand)                                                                   \
+                                                                                        \
+    macro("cd",                                                                         \
+        NULL,                                                                           \
+        "change directory.",                                                            \
+        "\ncd <path>\ncd /\ncd ..",                                                     \
+        onChangeDirectory)                                                              \
+                                                                                        \
+    macro("mkdir",                                                                      \
+        NULL,                                                                           \
+        "make a directory.",                                                            \
+        "mkdir <name>",                                                                 \
+        onMakeDirectory)                                                                \
+                                                                                        \
+    macro("folder",                                                                     \
+        NULL,                                                                           \
+        "open working directory in OS.",                                                \
+        NULL,                                                                           \
+        onFolderCommand)                                                                \
+                                                                                        \
+    macro("export",                                                                     \
+        NULL,                                                                           \
+        "export cart to HTML,\n"                                                        \
+        "native build (win linux rpi mac),\n"                                           \
+        "export sprites/map/... as a .png image "                                       \
+        "or export sfx and music to .wav files.",                                       \
+        "\nexport [" EXPORT_CMD_LIST(EXPORT_CMD_DEF) "...]"                             \
+        "<file> [" EXPORT_KEYS_LIST(EXPORT_KEYS_DEF) "...]" ,                           \
+        onExportCommand)                                                                \
+                                                                                        \
+    macro("import",                                                                     \
+        NULL,                                                                           \
+        "import code/sprites/map/... from an external file.",                           \
+        "\nimport [" IMPORT_CMD_LIST(IMPORT_CMD_DEF) "...]"                             \
+        "<file> [" IMPORT_KEYS_LIST(IMPORT_KEYS_DEF) "...]",                            \
+        onImportCommand)                                                                \
+                                                                                        \
+    macro("del",                                                                        \
+        NULL,                                                                           \
+        "delete from the filesystem.",                                                  \
+        "del <file|folder>",                                                            \
+        onDelCommand)                                                                   \
+                                                                                        \
+    macro("cls",                                                                        \
+        "clear",                                                                        \
+        "clear console screen.",                                                        \
+        NULL,                                                                           \
+        onClsCommand)                                                                   \
+                                                                                        \
+    macro("demo",                                                                       \
+        NULL,                                                                           \
+        "install demo carts to the current directory.",                                 \
+        NULL,                                                                           \
+        onInstallDemosCommand)                                                          \
+                                                                                        \
+    macro("config",                                                                     \
+        NULL,                                                                           \
+        "edit system configuration cartridge,\n"                                        \
+        "use `reset` param to reset current configuration,\n"                           \
+        "use `default` to edit default cart template.",                                 \
+        "config [reset|default]",                                                       \
+        onConfigCommand)                                                                \
+                                                                                        \
+    macro("surf",                                                                       \
+        NULL,                                                                           \
+        "open carts browser.",                                                          \
+        NULL,                                                                           \
+        onSurfCommand)                                                                  \
+                                                                                        \
+    macro("menu",                                                                       \
+        NULL,                                                                           \
+        "show game menu where you can setup keyboard/gamepad buttons mapping.",         \
+        NULL,                                                                           \
+        onGameMenuCommand)                                                              \
+                                                                                        \
+    ADDGET_FILE(macro)
+
 static struct Command
 {
     const char* name;
@@ -2509,203 +2675,27 @@ static struct Command
 
 } Commands[] =
 {
-    {
-        "help",
-        NULL,
-        "show help info about commands/api/...", 
-        HelpUsage,
-        onHelpCommand
-    },
-    {
-        "exit",
-        "quit",
-        "exit the application.", 
-        NULL,
-        onExitCommand
-    },
-    {
-        "new",
-        NULL,
-        "creates a new `Hello World` cartridge.",
-        "new [$LANG_NAMES_PIPE$...]",
-        onNewCommand
-    },
-    {
-        "load",
-        NULL,
-        "load cartridge from the local filesystem (there's no need to type the .tic extension).\n"
-        "you can also load just the section (sprites, map etc) from another cart.",
-        "load <cart> [code"
-#define SECTION_DEF(NAME, ...) "|" #NAME
-        TIC_SYNC_LIST(SECTION_DEF)
-#undef  SECTION_DEF
-        "]",
-        onLoadCommand},
-    {
-        "save",
-        NULL,
-        "save cartridge to the local filesystem, use $LANG_EXTENSIONS$"
-        "cart extension to save it in text format (PRO feature).", 
-        "save <cart>",
-        onSaveCommand
-    },
-
-    {
-        "run",
-        NULL,
-        "run current cart / project.", 
-        NULL,
-        onRunCommand
-    },
-    {
-        "resume",
-        NULL,
-        "resume last run cart / project.", 
-        NULL,
-        onResumeCommand
-    },
-    {
-        "eval",
-        "=",
-        "run code provided code.", 
-        NULL,
-        onEvalCommand
-    },
-    {
-        "dir",
-        "ls",
-        "show list of local files.", 
-        NULL,
-        onDirCommand
-    },
-    {
-        "cd",
-        NULL,
-        "change directory.", 
-        "\ncd <path>\ncd /\ncd ..",
-        onChangeDirectory
-    },
-    {
-        "mkdir",
-        NULL,
-        "make a directory.", 
-        "mkdir <name>",
-        onMakeDirectory
-    },
-    {
-        "folder",
-        NULL,
-        "open working directory in OS.", 
-        NULL,
-        onFolderCommand
-    },
-
-#if defined(CAN_ADDGET_FILE)
-    {
-        "add",
-        NULL,
-        "upload file to the browser local storage.", 
-        NULL,
-        onAddCommand
-    },
-    {
-        "get",
-        NULL,
-        "download file from the browser local storage.", 
-        "get <file>",
-        onGetCommand
-    },
-#endif
-
-    {
-        "export",
-        NULL,
-        "export cart to HTML,\n"
-        "native build (win linux rpi mac),\n"
-        "export sprites/map/... as a .png image "
-        "or export sfx and music to .wav files.", 
-        "\nexport ["
-#define EXPORT_CMD_DEF(name) #name "|"
-        EXPORT_CMD_LIST(EXPORT_CMD_DEF)
-#undef  EXPORT_CMD_DEF
-        "...] <file> ["
-#define EXPORT_KEYS_DEF(name) #name "=0 "
-        EXPORT_KEYS_LIST(EXPORT_KEYS_DEF)
-#undef  EXPORT_KEYS_DEF
-        "...]",
-        onExportCommand
-    },
-    {
-        "import",
-        NULL,
-        "import code/sprites/map/... from an external file.", 
-        "import ["
-#define IMPORT_CMD_DEF(name) #name "|"
-        IMPORT_CMD_LIST(IMPORT_CMD_DEF)
-#undef  IMPORT_CMD_DEF
-        "...] <file> ["
-#define IMPORT_KEYS_DEF(key) #key"=0 "
-        IMPORT_KEYS_LIST(IMPORT_KEYS_DEF)
-#undef  IMPORT_KEYS_DEF
-        "...]",
-        onImportCommand
-    },
-    {
-        "del",
-        NULL,
-        "delete from the filesystem.", 
-        "del <file|folder>",
-        onDelCommand
-    },
-    {
-        "cls",
-        "clear",
-        "clear console screen.", 
-        NULL,
-        onClsCommand
-    },
-    {
-        "demo",
-        NULL,
-        "install demo carts to the current directory.", 
-        NULL,
-        onInstallDemosCommand
-    },
-    {
-        "config",
-        NULL,
-        "edit system configuration cartridge,\n"
-        "use `reset` param to reset current configuration,\n"
-        "use `default` to edit default cart template.", 
-        "config [reset|default]",
-        onConfigCommand
-    },
-    {
-        "surf",
-        NULL,
-        "open carts browser.", 
-        NULL,
-        onSurfCommand
-    },
-    {
-        "menu",
-        NULL,
-        "show game menu where you can setup keyboard/gamepad buttons mapping.", 
-        NULL,
-        onGameMenuCommand
-    },
+#define COMMANDS_DEF(name, alt, help, usage, handler) {name, alt, help, usage, handler},
+    COMMANDS_LIST(COMMANDS_DEF)
+#undef COMMANDS_DEF
 };
+
+#undef SECTION_DEF
+#undef EXPORT_CMD_DEF
+#undef EXPORT_KEYS_DEF
+#undef IMPORT_CMD_DEF
+#undef IMPORT_KEYS_DEF
 
 typedef struct Command Command;
 
+#define API_LIST(macro)         \
+    TIC_CALLBACK_LIST(macro)    \
+    TIC_API_LIST(macro)
+
 static struct ApiItem {const char* name; const char* def; const char* help;} Api[] = 
 {
-#define TIC_CALLBACK_DEF(name, def, help) {name, def, help},
-    TIC_CALLBACK_LIST(TIC_CALLBACK_DEF)
-#undef TIC_CALLBACK_DEF
-
 #define TIC_API_DEF(name, def, help, ...) {#name, def, help},
-    TIC_API_LIST(TIC_API_DEF)
+    API_LIST(TIC_API_DEF)
 #undef TIC_API_DEF
 };
 
@@ -2769,10 +2759,11 @@ static s32 createVRamTable(char* buf)
         {offsetof(tic_ram, vram.screen),        "SCREEN"},
         {offsetof(tic_ram, vram.palette),       "PALETTE"},
         {offsetof(tic_ram, vram.mapping),       "PALETTE MAP"},
-        {offsetof(tic_ram, vram.vars),          "BORDER / BLIT SEG"},
+        {offsetof(tic_ram, vram.vars),          "BORDER COLOR"},
         {offsetof(tic_ram, vram.vars.offset),   "SCREEN OFFSET"},
         {offsetof(tic_ram, vram.vars.cursor),   "MOUSE CURSOR"},
-        {offsetof(tic_ram, vram.clip),          "CLIP"},
+        {offsetof(tic_ram, vram.blit),          "BLIT SEGMENT"},
+        {offsetof(tic_ram, vram.reserved),      "... (reserved) "},
         {TIC_VRAM_SIZE,                         ""},
     };
 
@@ -2959,14 +2950,19 @@ static void printApi(Console* console, const char* param)
     }
 }
 
+#define STRBUF_SIZE(name, ...) + STRLEN(#name) + STRLEN(Sep)
+
 static void onHelp_api(Console* console)
 {
     consolePrint(console, "\nAPI functions:\n", tic_color_blue);
     {
-        char buf[TICNAME_MAX] = {[0] = 0};
+        const char Sep[] = " ";
+
+        // calc buf size on compile time
+        char buf[API_LIST(STRBUF_SIZE) + 1] = {[0] = 0};
 
         FOR(const ApiItem*, api, Api)
-            strcat(buf, api->name), strcat(buf, " ");
+            strcat(buf, api->name), strcat(buf, Sep);
 
         printBack(console, buf);
     }
@@ -2976,14 +2972,19 @@ static void onHelp_commands(Console* console)
 {
     consolePrint(console, "\nConsole commands:\n", tic_color_green);
     {
-        char buf[TICNAME_MAX] = {[0] = 0};
+        const char Sep[] = " ";
+
+        // calc buf size on compile time
+        char buf[COMMANDS_LIST(STRBUF_SIZE) + 1] = {[0] = 0};
 
         FOR(const Command*, cmd, Commands)
-            strcat(buf, cmd->name), strcat(buf, " ");
+            strcat(buf, cmd->name), strcat(buf, Sep);
 
         printBack(console, buf);
     }
 }
+
+#undef STRBUF_SIZE
 
 static void printTable(Console* console, const char* text)
 {
@@ -3174,7 +3175,7 @@ static void processCommand(Console* console, const char* text)
         if(command)
         {
             printLine(console);
-            printError(console, "unknown command:");
+            printError(console, "unknown command: ");
             printError(console, command);
             commandDone(console);
         }
@@ -3547,8 +3548,14 @@ static void processKeyboard(Console* console)
         else if(keyWasPressed(tic_key_pageup))      processConsolePgUp(console);
         else if(keyWasPressed(tic_key_pagedown))    processConsolePgDown(console);
 
-        if(tic_api_key(tic, tic_key_ctrl) 
-            && keyWasPressed(tic_key_k))
+#       if defined(__TIC_LINUX__)
+            tic_keycode clearKey = tic_key_l;
+#       else
+            tic_keycode clearKey = tic_key_k;
+#       endif
+
+        if(tic_api_key(tic, tic_key_ctrl)
+            && keyWasPressed(clearKey))
         {
             onClsCommand(console);
             return;

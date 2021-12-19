@@ -142,7 +142,6 @@ static void drawDialog(Dialog* dlg)
             dlg->drag.active = false;
     }
 
-    tic_api_rect(tic, rect.x, rect.y, rect.w, rect.h, tic_color_dark_grey);
     tic_api_rectb(tic, rect.x, rect.y, rect.w, rect.h, tic_color_white);
     tic_api_line(tic, rect.x, rect.y+Height, rect.x+Width-1, rect.y+Height, tic_color_black);
     tic_api_rect(tic, rect.x, rect.y-(TOOLBAR_SIZE-2), rect.w, TOOLBAR_SIZE-2, tic_color_white);
@@ -191,6 +190,13 @@ static void tick(Dialog* dlg)
 
     tic_mem* tic = dlg->tic;
     drawBGAnimation(tic, dlg->ticks);
+
+    VBANK(tic, 1)
+    {
+        tic_api_cls(tic, tic->ram.vram.vars.clear = tic_color_yellow);
+        memcpy(tic->ram.vram.palette.data, getConfig()->cart->bank0.palette.vbank0.data, sizeof(tic_palette));
+        drawDialog(dlg);
+    }
 }
 
 static void scanline(tic_mem* tic, s32 row, void* data)
@@ -198,15 +204,6 @@ static void scanline(tic_mem* tic, s32 row, void* data)
     Dialog* dlg = (Dialog*)data;
 
     drawBGAnimationScanline(tic, row);
-}
-
-static void overline(tic_mem* tic, void* data)
-{
-    memcpy(tic->ram.vram.palette.data, getConfig()->cart->bank0.palette.scn.data, sizeof(tic_palette));
-
-    Dialog* dlg = (Dialog*)data;
-
-    drawDialog(dlg);
 }
 
 static void escape(Dialog* dlg)
@@ -223,7 +220,6 @@ void initDialog(Dialog* dlg, tic_mem* tic, const char** text, s32 rows, DialogCa
         .tic = tic,
         .tick = tick,
         .scanline = scanline,
-        .overline = overline,
         .escape = escape,
         .ticks = 0,
         .callback = callback,

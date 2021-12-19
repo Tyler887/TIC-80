@@ -17,6 +17,10 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
+    - uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: 2.6
+
     - name: Build
       shell: cmd
       run: |
@@ -46,6 +50,10 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
+    - uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: 2.6
+
     - name: Build
       shell: cmd
       run: |
@@ -68,6 +76,10 @@ jobs:
       with: 
         submodules: recursive
         fetch-depth: 0
+
+    - uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: 2.6
 
     - name: Build
       shell: cmd
@@ -98,6 +110,10 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
+    - uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: 2.6
+
     - name: Build
       shell: cmd
       run: |
@@ -120,6 +136,10 @@ jobs:
       with: 
         submodules: recursive
         fetch-depth: 0
+
+    - uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: 2.6
 
     - name: Build
       shell: cmd
@@ -144,6 +164,10 @@ jobs:
       with: 
         submodules: recursive
         fetch-depth: 0
+
+    - uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: 2.6
 
     - name: Install
       run: |
@@ -178,6 +202,10 @@ jobs:
       with: 
         submodules: recursive
         fetch-depth: 0
+
+    - uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: 2.6
 
     - name: Install
       run: |
@@ -220,6 +248,11 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
+    - name: Install Host toolchain
+      run: |
+        apt-get update
+        apt-get install --assume-yes build-essential ruby-full
+
     - name: Build
       run: |
         cd build
@@ -245,6 +278,41 @@ jobs:
         name: 'tic80-rpi-stub'
         path: build/bin/tic80*
 
+# === Raspberry PI PRO ===
+  rpi-pro:
+    runs-on: ubuntu-latest
+    container: nesbox/rpi-tic80:latest
+
+    steps:
+    - uses: actions/checkout@v2
+      with: 
+        submodules: recursive
+        fetch-depth: 0
+
+    - name: Install Host toolchain
+      run: |
+        apt-get update
+        apt-get install --assume-yes build-essential ruby-full
+
+    - name: Build
+      run: |
+        cd build
+        cmake -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DBUILD_PRO=On -DCMAKE_TOOLCHAIN_FILE=rpi/toolchain.cmake ..
+        cmake --build . --config $BUILD_TYPE --parallel
+        cpack
+
+    - name: Deploy DEB
+      uses: actions/upload-artifact@v2
+      with:
+        name: 'tic80-rpi-deb-pro'
+        path: build/tic80.deb
+
+    - name: Deploy
+      uses: actions/upload-artifact@v2
+      with:
+        name: 'tic80-rpi-pro'
+        path: build/bin/tic80
+
 # === Raspberry PI 1-3 Bare Metal ===
   rpi-baremetal:
     runs-on: ubuntu-latest
@@ -255,6 +323,11 @@ jobs:
       with: 
         submodules: recursive
         fetch-depth: 0
+
+    - name: Install Host toolchain
+      run: |
+        apt-get update
+        apt-get install --assume-yes build-essential ruby-full
 
     - name: Prebuild
       run: |
@@ -305,6 +378,11 @@ jobs:
       with: 
         submodules: recursive
         fetch-depth: 0
+
+    - name: Install Host toolchain
+      run: |
+        apt-get update
+        apt-get install --assume-yes build-essential ruby-full
 
     - name: Prebuild
       run: |
@@ -358,6 +436,11 @@ jobs:
       with: 
         submodules: recursive
         fetch-depth: 0
+
+    - name: Install Host toolchain
+      run: |
+        apt-get update
+        apt-get install --assume-yes build-essential ruby-full
 
     - name: Build
       run: |
@@ -478,6 +561,10 @@ jobs:
         submodules: recursive
         fetch-depth: 0
 
+    - uses: ruby/setup-ruby@v1
+      with:
+        ruby-version: 2.6
+
     - name: Build
       run: |
         cd build
@@ -588,7 +675,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        script: [lua, moon, fennel, js, wren, squirrel]
+        script: [lua, moon, fennel, ruby, js, wren, squirrel]
 
     steps:
       - name: Download Windows XP artifact
@@ -649,7 +736,7 @@ jobs:
             mac${{ matrix.script }}
             html${{ matrix.script }}
 
-# === Delete stub ===
+# === Delete stub artifacts ===
   delete-stub:
     needs: [export-stub]
     runs-on: ubuntu-latest
@@ -665,9 +752,22 @@ jobs:
             tic80-rpi-stub
             tic80-macos-stub
             tic80-wasm-stub
+
+# === Delete PRO artifacts ===
+  delete-pro:
+    needs: [winxp-pro, windows-pro, linux-pro, macos-pro, rpi-pro]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Delete artifacts
+        uses: geekyeggo/delete-artifact@v1
+        with:
+          name: |
             tic80-macos-pro
             tic80-macos-dmg-pro
             tic80-winxp-pro
             tic80-windows-pro
             tic80-linux-deb-pro
             tic80-linux-pro
+            tic80-rpi-deb-pro
+            tic80-rpi-pro

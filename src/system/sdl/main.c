@@ -25,6 +25,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <time.h>
 
 #if defined(CRT_SHADER_SUPPORT)
@@ -293,20 +294,23 @@ static void setWindowIcon()
 {
     enum{ Size = 64, TileSize = 16, ColorKey = 14, Cols = TileSize / TIC_SPRITESIZE, Scale = Size/TileSize};
 
-    DEFER(u32* pixels = SDL_malloc(Size * Size * sizeof(u32)), SDL_free(pixels))
+    u32* pixels = SDL_malloc(Size * Size * sizeof(u32));
+    SCOPE(SDL_free(pixels))
     {
-        const u32* pal = tic_tool_palette_blit(&platform.studio->config()->cart->bank0.palette.scn, platform.studio->tic->screen_format);
+        tic_blitpal pal = tic_tool_palette_blit(&platform.studio->config()->cart->bank0.palette.vbank0, platform.studio->tic->screen_format);
 
         for(s32 j = 0, index = 0; j < Size; j++)
             for(s32 i = 0; i < Size; i++, index++)
             {
                 u8 color = getSpritePixel(platform.studio->config()->cart->bank0.tiles.data, i/Scale, j/Scale);
-                pixels[index] = color == ColorKey ? 0 : pal[color];
+                pixels[index] = color == ColorKey ? 0 : pal.data[color];
             }
 
-        DEFER(SDL_Surface* surface = SDL_CreateRGBSurfaceFrom(pixels, Size, Size,
+        SDL_Surface* surface = SDL_CreateRGBSurfaceFrom(pixels, Size, Size,
             sizeof(s32) * BITS_IN_BYTE, Size * sizeof(s32),
-            0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000), SDL_FreeSurface(surface))
+            0x000000ff, 0x0000ff00, 0x00ff0000, 0xff000000);
+        
+        SCOPE(SDL_FreeSurface(surface))
         {
             SDL_SetWindowIcon(platform.window, surface);
         }
@@ -393,7 +397,7 @@ static void initTouchKeyboard()
 {
     tic_mem* tic = platform.studio->tic;
 
-    memcpy(tic->ram.vram.palette.data, platform.studio->config()->cart->bank0.palette.scn.data, sizeof(tic_palette));
+    memcpy(tic->ram.vram.palette.data, platform.studio->config()->cart->bank0.palette.vbank0.data, sizeof(tic_palette));
     tic_api_cls(tic, 0);
     map2ram();
 
@@ -444,7 +448,7 @@ static void initTouchGamepad()
         const tic_bank* bank = &platform.studio->config()->cart->bank0;
 
         {
-            memcpy(tic->ram.vram.palette.data, &bank->palette.scn, sizeof(tic_palette));
+            memcpy(tic->ram.vram.palette.data, &bank->palette.vbank0, sizeof(tic_palette));
             memcpy(tic->ram.tiles.data, &bank->tiles, sizeof(tic_tiles));
             tic_api_spr(tic, 0, 0, 0, TIC_SPRITESHEET_COLS, TIC_SPRITESHEET_COLS, NULL, 0, 1, tic_no_flip, tic_no_rotate);
         }
@@ -454,7 +458,7 @@ static void initTouchGamepad()
         tic_core_blit(tic);
 
         for(u32* pix = tic->screen, *end = pix + TIC80_FULLWIDTH * TIC80_FULLHEIGHT; pix != end; ++pix)
-            if(*pix == tic_rgba(&bank->palette.scn.colors[0]))
+            if(*pix == tic_rgba(&bank->palette.vbank0.colors[0]))
                 *pix = 0;
 
         memcpy(platform.gamepad.touch.pixels, tic->screen, TIC80_FULLWIDTH * TIC80_FULLHEIGHT * sizeof(u32));
@@ -491,15 +495,18 @@ static void initTouchGamepad()
 
 static void initGPU()
 {
+    bool vsync = platform.studio->config()->vsync;
+    bool soft = platform.studio->config()->soft;
+
 #if defined(CRT_SHADER_SUPPORT)
-    if(!platform.studio->config()->soft)
+    if(!soft)
     {
         s32 w, h;
         SDL_GetWindowSize(platform.window, &w, &h);
 
         GPU_SetInitWindow(SDL_GetWindowID(platform.window));
 
-        platform.screen.renderer.gpu = GPU_Init(w, h, GPU_INIT_DISABLE_VSYNC);
+        platform.screen.renderer.gpu = GPU_Init(w, h, vsync ? GPU_INIT_ENABLE_VSYNC : GPU_INIT_DISABLE_VSYNC);
 
         GPU_SetWindowResolution(w, h);
         GPU_SetVirtualResolution(platform.screen.renderer.gpu, w, h);
@@ -515,9 +522,10 @@ static void initGPU()
 #if defined(CRT_SHADER_SUPPORT)
             SDL_RENDERER_SOFTWARE
 #else
-            SDL_RENDERER_ACCELERATED
+            (soft ? SDL_RENDERER_SOFTWARE : SDL_RENDERER_ACCELERATED)
 #endif
-            );
+            | (!soft && vsync ? SDL_RENDERER_PRESENTVSYNC : 0)
+        );
 
         platform.screen.texture.sdl = SDL_CreateTexture(platform.screen.renderer.sdl, SDL_PIXELFORMAT_ABGR8888, 
             SDL_TEXTUREACCESS_STREAMING, TIC80_FULLWIDTH, TIC80_FULLHEIGHT);
@@ -1261,7 +1269,6 @@ static void renderGamepad()
             GPU_BlitScale(platform.gamepad.touch.texture.gpu, &src, platform.screen.renderer.gpu, dest.x, dest.y,
                 (float)dest.w / TIC_SPRITESIZE, (float)dest.h / TIC_SPRITESIZE);
         }
-        else
 #else
         {
             SDL_Rect src = {i * TIC_SPRITESIZE + Left, (tile->press ? TIC_SPRITESIZE : 0) + TIC80_MARGIN_TOP, TIC_SPRITESIZE, TIC_SPRITESIZE};
@@ -1537,12 +1544,6 @@ static void gpuTick()
 
 static void emsGpuTick()
 {
-    static double nextTick = -1.0;
-
-    if(nextTick < 0.0)
-        nextTick = emscripten_get_now();
-
-    nextTick += 1000.0/TIC80_FRAMERATE;
     gpuTick();
 
     EM_ASM(
@@ -1553,15 +1554,6 @@ static void emsGpuTick()
             FS.syncfs(false,function(){});
         }
     });
-
-    double delay = nextTick - emscripten_get_now();
-
-    if(delay < 0.0)
-    {
-        nextTick -= delay;
-    }
-    else
-        emscripten_set_main_loop_timing(EM_TIMING_SETTIMEOUT, delay);
 }
 
 #endif
@@ -1611,27 +1603,29 @@ static s32 start(s32 argc, char **argv, const char* folder)
             SDL_PauseAudioDevice(platform.audio.device, 0);
 
 #if defined(__EMSCRIPTEN__)
-            emscripten_set_main_loop(emsGpuTick, 0, 1);
+            emscripten_set_main_loop(emsGpuTick, platform.studio->config()->vsync ? 0 : TIC80_FRAMERATE, 1);
 #else
             {
-                u64 nextTick = SDL_GetPerformanceCounter();
+                u64 nextTick = 0;
                 const u64 Delta = SDL_GetPerformanceFrequency() / TIC80_FRAMERATE;
 
                 while (!platform.studio->quit)
                 {
-                    nextTick += Delta;
-                
                     gpuTick();
 
+                    if(nextTick == 0)
+                        nextTick = SDL_GetPerformanceCounter();
+                    else
                     {
                         s64 delay = nextTick - SDL_GetPerformanceCounter();
 
-                        if(delay >= 0)
+                        if(delay > 0)
                             SDL_Delay((u32)(delay * 1000 / SDL_GetPerformanceFrequency()));
                     }
+
+                    nextTick += Delta;
                 }
             }
-
 #endif
 
 #if defined(TOUCH_INPUT_SUPPORT)

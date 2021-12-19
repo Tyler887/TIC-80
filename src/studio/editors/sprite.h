@@ -49,7 +49,7 @@ struct Sprite
     struct
     {
         bool edit;
-        bool ovr;
+        bool vbank1;
         s32 focus;
     } palette;
 
@@ -75,7 +75,6 @@ struct Sprite
     void (*tick)(Sprite*);
     void (*event)(Sprite*, StudioEvent);
     void (*scanline)(tic_mem* tic, s32 row, void* data);
-    void (*overline)(tic_mem* tic, void* data);
 };
 
 typedef struct
